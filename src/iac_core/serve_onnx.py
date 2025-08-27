@@ -1,17 +1,19 @@
 from __future__ import annotations
 import argparse, json
 from pathlib import Path
-from typing import Optional, List, Tuple, Any
+from typing import Optional, List, Union
 import numpy as np
 import onnxruntime as ort
-from fastapi import FastAPI, Query
+from fastapi import FastAPI
 from pydantic import BaseModel
 import uvicorn
+
 
 def softmax(x: np.ndarray) -> np.ndarray:
     x = x - np.max(x, axis=1, keepdims=True)
     e = np.exp(x)
     return e / np.sum(e, axis=1, keepdims=True)
+
 
 def load_preprocess(path: Optional[str]):
     if not path:
@@ -20,49 +22,61 @@ def load_preprocess(path: Optional[str]):
     if not p.is_file():
         return None
     obj = json.loads(p.read_text(encoding="utf-8"))
-    def _arr(k): 
-        return np.array(obj.get(k, []), dtype=np.float32) if k in obj else None
-    mean = _arr("mean")
-    std  = _arr("std")
+    mean = np.array(obj.get("mean", []), dtype=np.float32) if "mean" in obj else None
+    std  = np.array(obj.get("std",  []), dtype=np.float32) if "std"  in obj else None
     names = obj.get("feature_names")
-    labels = obj.get("class_labels")  # pode ser list de ints ou strs
+    labels = obj.get("class_labels")
     return {"mean": mean, "std": std, "feature_names": names, "class_labels": labels}
 
+
 class PredictIn(BaseModel):
-    # aceita tanto [x1,...,xD] quanto [[...], [...]]
-    rows: Any
+    # aceita [[...], [...]] e também lista plana [...]
+    rows: Union[List[List[float]], List[float]]
+
+
+class TopKItem(BaseModel):
+    label: str
+    prob: float
+
 
 class PredictOut(BaseModel):
     preds: List[int]
+    pred_labels: Optional[List[str]] = None
     probs: Optional[List[List[float]]] = None
-    topk: Optional[List[List[Tuple[str, float]]]] = None  # [[(label, prob), ...], ...]
+    topk: Optional[List[List[TopKItem]]] = None
 
-def normalize_rows(rows: Any) -> List[List[float]]:
-    # se vier lista plana, transforma em [[...]]
-    if isinstance(rows, list) and (len(rows) > 0) and all(isinstance(v, (int, float)) for v in rows):
-        return [rows]
-    # senão espera lista de listas
-    if isinstance(rows, list) and (len(rows) > 0) and all(isinstance(v, list) for v in rows):
-        return rows
-    raise ValueError("Formato inválido em 'rows'. Use lista plana [..] ou lista de linhas [[..],[..]].")
 
 def build_app(session: ort.InferenceSession, input_name: str, input_dim: int, preprocess):
-    app = FastAPI(title="IAZero ONNX Server", version="0.2.0")
+    app = FastAPI(title="IAZero ONNX Server", version="0.1.0")
 
-    labels = preprocess.get("class_labels") if preprocess else None
-    if labels is not None:
-        labels = [str(x) for x in labels]  # homogeniza p/ string
+    class_labels: Optional[List[str]] = None
+    if preprocess and isinstance(preprocess.get("class_labels"), list):
+        class_labels = [str(x) for x in preprocess["class_labels"]]
 
     @app.get("/healthz")
     def healthz():
-        return {"status": "ok", "input": input_name, "dim": input_dim, "labels": labels}
+        return {
+            "status": "ok",
+            "input": input_name,
+            "dim": input_dim,
+            "has_preprocess": preprocess is not None,
+            "has_labels": class_labels is not None,
+            "num_labels": len(class_labels) if class_labels else 0,
+        }
 
     @app.post("/predict", response_model=PredictOut)
-    def predict(inp: PredictIn, return_proba: bool = True, top_k: int = Query(0, ge=0)):
-        rows = normalize_rows(inp.rows)
-        X = np.array(rows, dtype=np.float32)
+    def predict(inp: PredictIn, return_proba: bool = True, top_k: int = 0):
+        # --- normaliza rows para 2D ---
+        rows = inp.rows
+        if isinstance(rows, list) and rows and isinstance(rows[0], (int, float)):
+            # lista plana -> [rows]
+            X = np.array([rows], dtype=np.float32)
+        else:
+            X = np.array(rows, dtype=np.float32)
 
         # ajusta dimensões
+        if X.ndim != 2:
+            raise ValueError("Esperado matriz 2D (amostras x features) ou lista plana de floats.")
         if X.shape[1] > input_dim:
             X = X[:, :input_dim]
         elif X.shape[1] < input_dim:
@@ -75,38 +89,47 @@ def build_app(session: ort.InferenceSession, input_name: str, input_dim: int, pr
                 sd_safe = np.where(sd == 0.0, 1.0, sd)
                 X = (X - mu[:input_dim]) / sd_safe[:input_dim]
 
+        # inferência
         ort_inputs = {input_name: X}
         logits = session.run(None, ort_inputs)[0]
-        preds = np.argmax(logits, axis=1).astype(int)
+        preds = np.argmax(logits, axis=1).astype(int).tolist()
 
-        out_probs = None
-        out_topk = None
+        # mapeia rótulos, se disponíveis
+        pred_labels: Optional[List[str]] = None
+        if class_labels:
+            pred_labels = [
+                class_labels[p] if 0 <= p < len(class_labels) else str(p) for p in preds
+            ]
 
-        if return_proba or top_k > 0:
+        probs_json: Optional[List[List[float]]] = None
+        topk_json: Optional[List[List[TopKItem]]] = None
+
+        if return_proba:
             probs = softmax(logits)
-            if return_proba:
-                out_probs = probs.tolist()
-            if top_k > 0:
-                topk_idx = np.argpartition(-probs, kth=min(top_k, probs.shape[1]-1), axis=1)[:, :top_k]
-                # ordena por prob desc
-                sorted_idx = np.take_along_axis(topk_idx, np.argsort(
-                    np.take_along_axis(probs, topk_idx, axis=1), axis=1)[:, ::-1], axis=1)
-                out_topk = []
-                for i in range(probs.shape[0]):
-                    pair_list = []
-                    for j in range(sorted_idx.shape[1]):
-                        c = int(sorted_idx[i, j])
-                        label = labels[c] if (labels is not None and c < len(labels)) else str(c)
-                        pair_list.append((label, float(probs[i, c])))
-                    out_topk.append(pair_list)
+            probs_json = probs.tolist()
 
-        return {
-            "preds": preds.tolist(),
-            "probs": out_probs,
-            "topk": out_topk
-        }
+            if isinstance(top_k, int) and top_k > 0:
+                k = int(top_k)
+                n_classes = probs.shape[1]
+                k = max(1, min(k, n_classes))
+                topk_json = []
+                for i in range(probs.shape[0]):
+                    idxs = np.argpartition(-probs[i], k - 1)[:k]
+                    idxs = idxs[np.argsort(-probs[i, idxs])]
+                    items: List[TopKItem] = []
+                    for c in idxs:
+                        label = (
+                            class_labels[c]
+                            if class_labels and 0 <= c < len(class_labels)
+                            else str(int(c))
+                        )
+                        items.append(TopKItem(label=label, prob=float(probs[i, c])))
+                    topk_json.append(items)
+
+        return PredictOut(preds=preds, pred_labels=pred_labels, probs=probs_json, topk=topk_json)
 
     return app
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -118,12 +141,15 @@ def main():
 
     sess = ort.InferenceSession(args.model, providers=["CPUExecutionProvider"])
     input_name = sess.get_inputs()[0].name
-    shape = sess.get_inputs()[0].shape  # ex: [ 'batch', 32 ]
+
+    # descobre input_dim pela forma do 1º input
+    shape = sess.get_inputs()[0].shape  # ex: ["batch", 32]
     input_dim = int(shape[1]) if (len(shape) >= 2 and isinstance(shape[1], (int, np.integer))) else 32
 
     preprocess = load_preprocess(args.preprocess)
     app = build_app(sess, input_name, input_dim, preprocess)
     uvicorn.run(app, host=args.host, port=args.port)
+
 
 if __name__ == "__main__":
     main()
