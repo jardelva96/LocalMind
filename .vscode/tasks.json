@@ -1,0 +1,17 @@
+{
+"version": "2.0.0",
+"tasks": [
+ {
+   "label": "pytest",
+   "type": "shell",
+   "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
+   "problemMatcher": []
+ },
+ {
+   "label": "run-train",
+   "type": "shell",
+   "command": ".\\.venv\\Scripts\\python.exe -m iac_core.train",
+   "problemMatcher": []
+ }
+]
+}

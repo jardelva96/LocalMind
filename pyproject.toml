@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iac-core"
+version = "0.0.1"
+description = "IA do Zero - core (local-first, sem APIs externas)"
+requires-python = ">=3.11"
+authors = [{ name = "Jardel Vieira Alves" }]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["iac_core*"]

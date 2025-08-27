@@ -1,0 +1,1 @@
+# Utilitários gerais (seed, logging, paths)

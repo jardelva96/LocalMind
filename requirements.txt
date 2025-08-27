@@ -1,0 +1,28 @@
+# Núcleo científico
+numpy
+pandas
+scipy
+matplotlib
+tqdm
+scikit-learn
+
+# Deep Learning (PyTorch será instalado separadamente por índice específico)
+# torch
+# torchvision
+# torchaudio
+
+# Organização de experimento
+hydra-core
+pytorch-lightning
+
+# Qualidade e DX
+rich
+python-dotenv
+pytest
+mypy
+ruff
+black
+
+# Notebooks
+jupyter
+ipykernel

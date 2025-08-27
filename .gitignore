@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.env
+.env.*
+.ipynb_checkpoints/
+dist/
+build/
+
+# Dados/Modelos grandes
+data/raw/
+data/processed/
+models/checkpoints/
+models/*.pt
+models/*.bin
+models/*.onnx
+
+# VSCode
+.vscode/*.log
+.history/

@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: iac-core
+Version: 0.0.1
+Summary: IA do Zero - core (local-first, sem APIs externas)
+Author: Jardel Vieira Alves
+Requires-Python: >=3.11
