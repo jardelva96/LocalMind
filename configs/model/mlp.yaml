@@ -1,0 +1,7 @@
+# MLP genérico para classificação
+input_dim: ${dataset.n_features}
+hidden_dims: [128, 64]
+dropout: 0.1
+num_classes: ${dataset.n_classes}
+lr: 0.001
+weight_decay: 1e-4

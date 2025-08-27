@@ -1,0 +1,7 @@
+defaults:
+  - dataset: synthetic_classif
+  - model: mlp
+  - train: default
+  - _self_
+
+seed: 42

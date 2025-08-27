@@ -1,0 +1,2 @@
+- train.max_epochs=3
+- dataset.batch_size=128

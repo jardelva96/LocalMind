@@ -1,0 +1,6 @@
+max_epochs: 10
+precision: "32-true"
+accelerator: "auto"
+devices: 1
+log_every_n_steps: 20
+enable_progress_bar: true
