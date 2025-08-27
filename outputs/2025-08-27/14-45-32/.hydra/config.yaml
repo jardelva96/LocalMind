@@ -1,0 +1,27 @@
+dataset:
+  name: csv_classif
+  path: ./data/processed/dataset.csv
+  target_col: target
+  drop_cols: []
+  test_size: 0.2
+  val_size: 0.1
+  batch_size: 64
+  num_workers: 0
+  normalize: true
+model:
+  input_dim: ${dataset.n_features}
+  hidden_dims:
+  - 128
+  - 64
+  dropout: 0.1
+  num_classes: ${dataset.n_classes}
+  lr: 0.001
+  weight_decay: 0.0001
+train:
+  max_epochs: 10
+  precision: 32-true
+  accelerator: auto
+  devices: 1
+  log_every_n_steps: 20
+  enable_progress_bar: true
+seed: 42

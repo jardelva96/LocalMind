@@ -1,0 +1,9 @@
+name: csv_classif
+path: ./data/processed/dataset.csv   # mude se quiser
+target_col: target                   # coluna alvo
+drop_cols: []                        # colunas pra descartar (ex.: ["id"])
+test_size: 0.2
+val_size: 0.1
+batch_size: 64
+num_workers: 0
+normalize: true
