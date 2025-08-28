@@ -9,6 +9,15 @@ from pydantic import BaseModel
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import os
+from fastapi import Header, HTTPException, Depends
+
+API_KEY = os.getenv("IAZERO_API_KEY", "")
+
+
+async def verify_api_key(x_api_key: str | None = Header(None)):
+    if API_KEY and x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="invalid api key")
 
 
 def softmax(x: np.ndarray) -> np.ndarray:
@@ -86,8 +95,12 @@ def build_app(
         }
 
     # REGISTRE as rotas ANTES do return!
-    @app.post("/predict", response_model=PredictOut)
-    @app.post("/predict/", response_model=PredictOut)  # aceita com/sem barra
+    @app.post(
+        "/predict", response_model=PredictOut, dependencies=[Depends(verify_api_key)]
+    )
+    @app.post(
+        "/predict/", response_model=PredictOut, dependencies=[Depends(verify_api_key)]
+    )  # aceita com/sem barra
     def predict(inp: PredictIn, return_proba: bool = True, top_k: int = 0):
         # --- normaliza rows para 2D ---
         rows = inp.rows
