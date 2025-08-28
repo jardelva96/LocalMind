@@ -1,0 +1,14 @@
+services:
+  iazero:
+    image: iazero:serve
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      IAZERO_MODEL: /app/models/export/iazero.onnx
+      IAZERO_PREPROC: /app/models/export/preprocess.json
+      IAZERO_HOST: 0.0.0.0
+      IAZERO_PORT: 8000
+      IAZERO_API_KEY: "troque-isto" # opcional (ver passo 3)
+    volumes:
+      - ./models/export:/app/models/export:ro

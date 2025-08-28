@@ -1,0 +1,8 @@
+﻿.git
+__pycache__/
+*.pyc
+logs/
+data/
+.venv/
+models/export/*.pt
+models/export/*.ckpt
