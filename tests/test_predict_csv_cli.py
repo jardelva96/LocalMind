@@ -13,17 +13,16 @@ def test_predict_csv_cli():
         csv_path = f.name
         # Create sample data with 32 features (matching test_api.py)
         df = pd.DataFrame(np.random.rand(10, 32), columns=[f'feature_{i}' for i in range(32)])
-        df.to_csv(csv_path, index=False)
+        df.to_csv(f, index=False)
     
     try:
-        # Create temporary output file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
-            out_path = f.name
+        # Create temporary output path (let the CLI create the file)
+        out_path = tempfile.mktemp(suffix='.csv')
         
         try:
             # Get the API URL from environment or use default
             base_url = os.getenv("IAZERO_URL", "http://127.0.0.1:8000")
-            api_key = os.getenv("IAZERO_API_KEY", None)
+            api_key = os.getenv("IAZERO_API_KEY")
             
             # Build command
             cmd = [
