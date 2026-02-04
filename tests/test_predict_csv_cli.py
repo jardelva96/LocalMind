@@ -16,8 +16,11 @@ def test_predict_csv_cli():
         df.to_csv(f, index=False)
     
     try:
-        # Create temporary output path (let the CLI create the file)
-        out_path = tempfile.mktemp(suffix='.csv')
+        # Create temporary output file path using a safer method
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f_out:
+            out_path = f_out.name
+        # Delete the file so CLI can create it (avoids race condition by using a unique name)
+        Path(out_path).unlink()
         
         try:
             # Get the API URL from environment or use default
